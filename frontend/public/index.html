@@ -6,12 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Custom fade‑in animation */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    @keyframes fadeIn { from {opacity:0;transform:translateY(20px)} to {opacity:1;transform:translateY(0)} }
+    .fade-in { animation: fadeIn .5s ease-out forwards }
   </style>
 </head>
 <body class="bg-gradient-to-br from-purple-700 via-indigo-800 to-gray-900 text-white min-h-screen flex flex-col">
@@ -21,21 +17,22 @@
     <p class="text-center text-gray-300 mt-2">Voice your thoughts. Inspire the world.</p>
   </header>
 
-  <!-- Main Content -->
+  <!-- Main -->
   <main class="flex-grow container mx-auto px-4 py-8">
-    <!-- Posts list -->
+
+    <!-- List -->
     <section id="posts-section">
       <h2 class="text-2xl font-bold mb-4">Latest Posts</h2>
       <ul id="post-list" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"></ul>
     </section>
 
-    <!-- Create post form -->
+    <!-- Create -->
     <section class="mt-12 bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-xl">
       <h2 class="text-2xl font-bold mb-4">Create Post</h2>
       <div class="space-y-4">
         <input id="title" placeholder="Title" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
         <textarea id="content" placeholder="Content" rows="4" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
-        <button id="add-btn" class="px-6 py-2 font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-400 active:scale-95 transition transform">Publish</button>
+        <button id="add-btn" class="px-6 py-2 font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-400 active:scale-95 transition">Publish</button>
       </div>
     </section>
   </main>
@@ -48,49 +45,88 @@
 <script>
   const api = "http://localhost:5000";
 
-  /** Build a pretty post card */
-  function createCard(post) {
-    const li = document.createElement("li");
-    li.className = "fade-in bg-white/10 backdrop-blur-md p-6 rounded-2xl shadow-lg hover:-translate-y-1 hover:shadow-2xl transition transform";
-    li.innerHTML = `
-      <h3 class="text-xl font-bold mb-2">${post.title}</h3>
-      <p class="text-gray-200 text-sm whitespace-pre-line">${post.content}</p>
-    `;
+  /* ---------- helpers ---------- */
+  const $ = sel => document.querySelector(sel);
+  const el = (tag, cls="") => { const n=document.createElement(tag); n.className=cls; return n; };
+
+  /* build a card for a post */
+  function createCard(post){
+    const li = el("li","fade-in bg-white/10 backdrop-blur-md p-6 rounded-2xl shadow-lg hover:-translate-y-1 hover:shadow-2xl transition relative");
+
+    const title = el("h3","text-xl font-bold mb-2");
+    title.textContent = post.title;
+
+    const body = el("p","text-gray-200 text-sm whitespace-pre-line");
+    body.textContent = post.content;
+
+    /* action buttons */
+    const btnBox = el("div","absolute top-4 right-4 flex space-x-2 opacity-0 group-hover:opacity-100 transition");
+    const editBtn = el("button","p-1 rounded-lg hover:bg-white/20");
+    editBtn.title = "Edit";
+    editBtn.textContent = "✏️";
+    const delBtn  = el("button","p-1 rounded-lg hover:bg-white/20");
+    delBtn.title = "Delete";
+    delBtn.textContent = "🗑️";
+    btnBox.append(editBtn, delBtn);
+    li.append(title, body, btnBox);
+    li.classList.add("group");
+
+    /* edit handler */
+    editBtn.onclick = () => {
+      /* replace static content with an inline form */
+      const tIn = el("input","w-full mb-2 px-3 py-2 rounded bg-white/20");
+      tIn.value = post.title;
+      const cIn = el("textarea","w-full h-32 px-3 py-2 rounded bg-white/20 mb-2");
+      cIn.value = post.content;
+      const save = el("button","mr-2 px-3 py-1 rounded bg-green-500 hover:bg-green-400");
+      save.textContent = "Save";
+      const cancel = el("button","px-3 py-1 rounded bg-red-500 hover:bg-red-400");
+      cancel.textContent = "Cancel";
+
+      li.innerHTML=""; li.append(tIn, cIn, save, cancel);
+
+      save.onclick = async ()=>{
+        await fetch(`${api}/posts/${post.id}`,{
+          method:"PUT",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ title:tIn.value, content:cIn.value })
+        });
+        loadPosts();
+      };
+      cancel.onclick = loadPosts;
+    };
+
+    /* delete handler */
+    delBtn.onclick = async ()=>{
+      if(!confirm("Delete this post?")) return;
+      await fetch(`${api}/posts/${post.id}`,{ method:"DELETE" });
+      loadPosts();
+    };
+
     return li;
   }
 
-  /** Load and render posts */
-  async function loadPosts() {
-    const res = await fetch(api + "/posts");
+  /* fetch + render */
+  async function loadPosts(){
+    const res = await fetch(api+"/posts");
     const posts = await res.json();
-    const list = document.getElementById("post-list");
-    list.innerHTML = "";
-    posts.slice().reverse().forEach(p => list.appendChild(createCard(p))); // latest first
+    const list = $("#post-list");
+    list.innerHTML="";
+    posts.slice().reverse().forEach(p=>list.appendChild(createCard(p)));
   }
 
-  /** Add a new post via API */
-  async function addPost() {
-    const titleInput = document.getElementById("title");
-    const contentInput = document.getElementById("content");
-    const title = titleInput.value.trim();
-    const content = contentInput.value.trim();
-    if (!title || !content) {
-      alert("Please enter a title and content.");
-      return;
-    }
-    await fetch(api + "/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content })
-    });
-    titleInput.value = "";
-    contentInput.value = "";
+  /* new post */
+  async function addPost(){
+    const t=$("#title"), c=$("#content");
+    if(!t.value.trim() || !c.value.trim()) return alert("Please enter a title and content.");
+    await fetch(api+"/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:t.value,content:c.value})});
+    t.value=""; c.value="";
     loadPosts();
   }
 
-  // Wire up events & load initial posts
-  document.getElementById("add-btn").addEventListener("click", addPost);
-  document.getElementById("year").textContent = new Date().getFullYear();
+  /* init */
+  $("#add-btn").addEventListener("click", addPost);
+  $("#year").textContent = new Date().getFullYear();
   loadPosts();
 </script>
 </body>

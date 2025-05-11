@@ -1,4 +1,6 @@
-version: "3.8"
+# docker-compose.yml  
+version: "3.9"
+
 services:
   db:
     image: postgres:16
@@ -6,8 +8,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: flaskdb
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
+
   web:
     build: ./backend
     environment:
@@ -15,7 +22,7 @@ services:
       DB_PASSWORD: password
       DB_HOST: db
       DB_NAME: flaskdb
-    ports:
-      - "5000:5000"
+    ports: ["5000:5000"]
     depends_on:
-      - db
+      db:
+        condition: service_healthy
